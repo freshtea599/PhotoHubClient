@@ -1,59 +1,73 @@
 <template>
-  <div class="container mx-auto mt-8 max-w-sm">
-    <h2 class="text-3xl font-bold text-center mb-6">Вход</h2>
-    <form @submit.prevent="handleLogin">
-      <div class="mb-4">
-        <label for="username" class="block text-gray-700 font-medium mb-2">Логин:</label>
-        <input v-model="username" id="username" type="text" required placeholder="Введите логин"
-          class="w-full px-4 py-2 border rounded-lg focus:outline-none" />
-      </div>
-      <div class="mb-6">
-        <label for="password" class="block text-gray-700 font-medium mb-2">Пароль:</label>
-        <input v-model="password" id="password" type="password" required placeholder="Введите пароль"
-          class="w-full px-4 py-2 border rounded-lg focus:outline-none" />
-      </div>
-      <div v-if="errorMessage" class="text-red-500 text-sm mb-4">{{ errorMessage }}</div>
-      <button type="submit" :disabled="isLoading"
-        class="w-full bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 focus:outline-none">
-        <span v-if="isLoading">Загрузка...</span>
-        <span v-else>Войти</span>
-      </button>
-    </form>
+  <div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 py-12 px-4">
+    <div class="max-w-md w-full bg-white rounded-lg shadow-lg p-8">
+      <h2 class="text-3xl font-bold text-center mb-6 text-gray-800">Вход</h2>
+      
+      <form @submit.prevent="handleLogin" class="space-y-4">
+        <div>
+          <label for="email" class="block text-sm font-medium text-gray-700 mb-2">Email</label>
+          <input
+            v-model="email"
+            id="email"
+            type="email"
+            required
+            placeholder="your@email.com"
+            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+          />
+        </div>
+
+        <div>
+          <label for="password" class="block text-sm font-medium text-gray-700 mb-2">Пароль</label>
+          <input
+            v-model="password"
+            id="password"
+            type="password"
+            required
+            placeholder="••••••••"
+            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+          />
+        </div>
+
+        <div v-if="authStore.error" class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+          {{ authStore.error }}
+        </div>
+
+        <button
+          type="submit"
+          :disabled="authStore.loading"
+          class="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-semibold py-2 px-4 rounded-lg transition"
+        >
+          {{ authStore.loading ? 'Загрузка...' : 'Войти' }}
+        </button>
+      </form>
+
+      <p class="text-center text-gray-600 mt-4">
+        Нет аккаунта?
+        <router-link to="/register" class="text-blue-600 hover:underline font-medium">
+          Зарегистрироваться
+        </router-link>
+      </p>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref } from "vue";
-import axios from "axios";
-import { useRouter } from "vue-router";
+import { ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
 
-const username = ref("");
-const password = ref("");
-const errorMessage = ref("");
-const isLoading = ref(false);
-const router = useRouter();
+const router = useRouter()
+const authStore = useAuthStore()
+
+const email = ref('')
+const password = ref('')
 
 const handleLogin = async () => {
-  if (!username.value || !password.value) {
-    errorMessage.value = "Пожалуйста, заполните все поля.";
-    return;
-  }
-
-  isLoading.value = true;
-  errorMessage.value = "";
-
   try {
-    const response = await axios.post("http://localhost:3000/api/login", {
-      email: username.value,
-      password: password.value,
-    });
-
-    localStorage.setItem("token", response.data.token);
-    router.push("/profile");
-  } catch (error) {
-    errorMessage.value = error.response?.data?.message || "Ошибка входа! Проверьте данные.";
-  } finally {
-    isLoading.value = false;
+    await authStore.login(email.value, password.value)
+    router.push('/profile')
+  } catch (err) {
+    console.error('Login error:', err)
   }
-};
+}
 </script>
