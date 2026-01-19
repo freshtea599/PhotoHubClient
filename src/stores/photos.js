@@ -13,27 +13,36 @@ export const usePhotoStore = defineStore('photos', () => {
   const uploading = ref(false)
   const uploadProgress = ref(0)
 
-  const fetchPhotos = async (limit = 20, offset = 0) => {
-    loading.value = true
-    error.value = null
-    try {
-      const response = await photoService.getPhotos(limit, offset)
-      photos.value = response.data
-    } catch (err) {
-      error.value = err.response?.data?.error || 'Failed to fetch photos'
-    } finally {
-      loading.value = false
-    }
+const fetchPhotos = async (limit = 20, offset = 0, forceRefresh = false) => {
+  // Если данные уже есть, это первая страница и мы не просили обновить принудительно = выходим
+  if (!forceRefresh && offset === 0 && photos.value.length > 0) {
+    return
   }
+
+  loading.value = true
+  error.value = null
+  try {
+    const response = await photoService.getPhotos(limit, offset)
+    photos.value = response.data || []
+  } catch (err) {
+    error.value = err.response?.data?.error || 'Ошибка загрузки фото'
+    photos.value = []
+  } finally {
+    loading.value = false
+  }
+}
+
+
 
   const fetchMyPhotos = async (limit = 50, offset = 0) => {
     loading.value = true
     error.value = null
     try {
       const response = await photoService.getMyPhotos(limit, offset)
-      myPhotos.value = response.data
+      myPhotos.value = response.data || []
     } catch (err) {
       error.value = err.response?.data?.error || 'Failed to fetch my photos'
+      myPhotos.value = []
     } finally {
       loading.value = false
     }

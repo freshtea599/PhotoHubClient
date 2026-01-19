@@ -1,29 +1,18 @@
-# 1
+# PhotoHub Client 🖼️
 
-This template should help get you started developing with Vue 3 in Vite.
+Клиентская часть сервиса PhotoHub. SPA-приложение, разработанное на Vue 3 с использованием Vite и Pinia.
 
-## Recommended IDE Setup
+## ⚡ Особенности
 
-[VSCode](https://code.visualstudio.com/) + [Volar](https://marketplace.visualstudio.com/items?itemName=Vue.volar) (and disable Vetur).
-
-## Customize configuration
-
-See [Vite Configuration Reference](https://vite.dev/config/).
-
-## Project Setup
-
-```sh
-npm install
-```
-
-### Compile and Hot-Reload for Development
-
-```sh
-npm run dev
-```
-
-### Compile and Minify for Production
-
-```sh
-npm run build
-```
+- **Современный стек**: Vue 3, Vite, Vue Router.
+- **State Management**: Pinia для управления состоянием пользователя и UI.
+- **Оптимизация**:
+  - Ленивая загрузка компонентов.
+  - Адаптивная верстка.
+  - Поддержка отображения оптимизированных изображений.
+- **Функционал**:
+  - Галерея с Masonry-раскладкой.
+  - Личный кабинет и управление библиотекой.
+  - Загрузка изображений
+  - Админ-панель для модераторов.
+  - Комментарии и лайки в реальном времени.

@@ -1,22 +1,42 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { useAuthStore } from './stores/auth'
 
-import Login from './components/Login.vue'
-import Register from './components/Register.vue'
-import Upload from './components/Upload.vue'
+// Статический импорт только для Галереи (главная страница)
 import Gallery from './components/Gallery.vue'
-import Profile from './components/Profile.vue'
-import MyLibrary from './components/MyLibrary.vue'
-import AdminPanel from './components/AdminPanel.vue'
 
 const routes = [
   { path: '/', component: Gallery },
-  { path: '/login', component: Login },
-  { path: '/register', component: Register },
   { path: '/gallery', component: Gallery },
-  { path: '/upload', component: Upload, meta: { requiresAuth: true } },
-  { path: '/profile', component: Profile, meta: { requiresAuth: true } },
-  { path: '/library', component: MyLibrary, meta: { requiresAuth: true } },
-  { path: '/admin', component: AdminPanel, meta: { requiresAuth: true, requiresAdmin: true } },
+  
+  // ✅ ВСЁ ОСТАЛЬНОЕ - ДИНАМИЧЕСКИЙ ИМПОРТ
+  { 
+    path: '/login', 
+    component: () => import('./components/Login.vue') 
+  },
+  { 
+    path: '/register', 
+    component: () => import('./components/Register.vue') 
+  },
+  { 
+    path: '/upload', 
+    component: () => import('./components/Upload.vue'), 
+    meta: { requiresAuth: true } 
+  },
+  { 
+    path: '/profile', 
+    component: () => import('./components/Profile.vue'), 
+    meta: { requiresAuth: true } 
+  },
+  { 
+    path: '/library', 
+    component: () => import('./components/MyLibrary.vue'), 
+    meta: { requiresAuth: true } 
+  },
+  { 
+    path: '/admin', 
+    component: () => import('./components/AdminPanel.vue'), 
+    meta: { requiresAuth: true, requiresAdmin: true } 
+  },
 ]
 
 const router = createRouter({
@@ -24,13 +44,32 @@ const router = createRouter({
   routes,
 })
 
-router.beforeEach((to, from, next) => {
+router.beforeEach(async (to, from, next) => {
   const token = localStorage.getItem('token')
+  const authStore = useAuthStore()
 
-  if (to.meta.requiresAuth && !token) return next('/login')
-  if ((to.path === '/login' || to.path === '/register') && token) return next('/profile')
+  if (to.meta.requiresAuth && !token) {
+    return next('/login')
+  }
 
-  // TODO: проверить что юзер админ если требуется
+  if ((to.path === '/login' || to.path === '/register') && token) {
+    return next('/profile')
+  }
+
+  if (to.meta.requiresAdmin) {
+    if (!token) return next('/login')
+    if (!authStore.user) {
+      try {
+        await authStore.loadUser()
+      } catch (err) {
+        localStorage.removeItem('token')
+        return next('/login')
+      }
+    }
+    if (!authStore.user?.is_admin) {
+      return next('/')
+    }
+  }
 
   next()
 })

@@ -3,7 +3,6 @@
     <div class="max-w-6xl mx-auto">
       <h1 class="text-4xl font-bold mb-8 text-gray-800">Админ панель</h1>
 
-      <!-- Tabs -->
       <div class="flex gap-4 mb-8 border-b">
         <button
           @click="activeTab = 'photos'"
@@ -26,14 +25,13 @@
         </button>
       </div>
 
-      <!-- Pending photos -->
       <div v-if="activeTab === 'photos'" class="space-y-4">
         <div v-if="pendingPhotos.length === 0" class="text-center py-8 text-gray-600">
           Нет фото на проверке
         </div>
 
         <div v-for="photo in pendingPhotos" :key="photo.id" class="bg-white rounded-lg shadow p-4 flex gap-4">
-          <img :src="`http://localhost:3000${photo.url}`" :alt="photo.description" class="w-32 h-32 object-cover rounded" />
+          <img :src="getImageUrl(photo.url)" :alt="photo.description" class="w-32 h-32 object-cover rounded" />
 
           <div class="flex-1">
             <h3 class="font-semibold">{{ photo.description || 'Без описания' }}</h3>
@@ -59,7 +57,6 @@
         </div>
       </div>
 
-      <!-- Comment reports -->
       <div v-if="activeTab === 'reports'" class="space-y-4">
         <div v-if="reports.length === 0" class="text-center py-8 text-gray-600">
           Нет жалоб
@@ -93,7 +90,6 @@
       </div>
     </div>
 
-    <!-- Reject photo modal -->
     <div v-if="rejectingPhotoId" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" @click="closeRejectModal">
       <div class="bg-white rounded-lg p-6 w-96" @click.stop>
         <h3 class="text-lg font-semibold mb-4">Отклонить фото</h3>
@@ -135,6 +131,15 @@ const reports = ref([])
 
 const rejectingPhotoId = ref(null)
 const rejectReason = ref('')
+
+const getImageUrl = (path) => {
+  const base = import.meta.env.VITE_API_URL || 'http://localhost:3000'
+  if (!path) return ''
+  if (path.startsWith('http')) return path
+  if (!path.startsWith('/')) path = '/' + path
+  return base + path
+}
+
 
 const loadPendingPhotos = async () => {
   try {

@@ -31,19 +31,35 @@ export const authService = {
 }
 
 export const photoService = {
-  getPhotos: (limit = 20, offset = 0) => api.get('/photos', { params: { limit, offset } }),
-  getMyPhotos: (limit = 50, offset = 0) => api.get('/photos/mine', { params: { limit, offset } }),
+  // ✅ основные методы (как у вас сейчас)
+  getPhotos: (limit = 20, offset = 0) =>
+    api.get('/photos', { params: { limit, offset } }),
+
+  getMyPhotos: (limit = 50, offset = 0) =>
+    api.get('/photos/mine', { params: { limit, offset } }),
+
   getPhotoById: (id) => api.get(`/photos/${id}`),
+
   uploadPhoto: (formData) =>
-    api.post('/photos/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+    api.post('/photos/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+
   updatePhoto: (id, data) => api.put(`/photos/${id}`, data),
   deletePhoto: (id) => api.delete(`/photos/${id}`),
-  
-  // Лайки фото
+
   likePhoto: (id) => api.post(`/photos/${id}/like`),
   unlikePhoto: (id) => api.delete(`/photos/${id}/like`),
-  isPhotoLiked: (id) => api.get(`/photos/${id}/liked`),
+  isPhotoLiked: (id) => api.get(`/photos/${id}/like`),
+
+  // ✅ алиасы (чинят ошибку "fetchPhotos is not a function")
+  fetchPhotos: (limit = 20, offset = 0) =>
+    api.get('/photos', { params: { limit, offset } }),
+
+  fetchMyPhotos: (limit = 50, offset = 0) =>
+    api.get('/photos/mine', { params: { limit, offset } }),
 }
+
 
 export const commentService = {
   getComments: (photoId) => api.get(`/photos/${photoId}/comments`),

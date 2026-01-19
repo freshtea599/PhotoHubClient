@@ -96,7 +96,13 @@
     </nav>
 
     <main class="pt-16">
-      <router-view />
+      <router-view v-slot="{ Component }">
+        <!-- KeepAlive сохраняет состояние Gallery в памяти -->
+        <keep-alive include="Gallery">
+          <component :is="Component" />
+        </keep-alive>
+      </router-view>
+
     </main>
   </div>
 </template>

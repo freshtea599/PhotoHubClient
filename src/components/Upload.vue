@@ -120,7 +120,6 @@ const uploadPhoto = async () => {
   if (!(selectedFile.value instanceof File)) return
   await photoStore.uploadPhoto(selectedFile.value, description.value, isPublic.value)
 
-  // после успешной загрузки — в личную библиотеку
   router.push('/library')
 }
 

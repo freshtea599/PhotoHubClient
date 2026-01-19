@@ -32,11 +32,11 @@
           :key="photo.id"
           class="overflow-hidden rounded-lg shadow-lg bg-white"
         >
-          <div class="w-full h-64 overflow-hidden bg-gray-200">
+          <div class="w-full h-64 overflow-hidden bg-gray-200">http://localhost:3000
             <img
-              :src="`http://localhost:3000${photo.url}`"
-              :alt="photo.description || 'Photo'"
-              class="w-full h-full object-cover"
+            :src="getImageUrl(photo.url)"
+            :alt="photo.description || 'Photo'"
+            class="w-full h-full object-cover"
             />
           </div>
           <div class="p-4 space-y-1">
@@ -59,6 +59,13 @@ import { onMounted } from 'vue'
 import { usePhotoStore } from '../stores/photos'
 
 const photoStore = usePhotoStore()
+const getImageUrl = (path) => {
+  const base = import.meta.env.VITE_API_URL || 'http://localhost:3000'
+  if (!path) return ''
+  if (path.startsWith('http')) return path
+  if (!path.startsWith('/')) path = '/' + path
+  return base + path
+}
 
 onMounted(async () => {
   await photoStore.fetchMyPhotos()
