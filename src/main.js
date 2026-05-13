@@ -1,19 +1,17 @@
-import { createApp } from 'vue'
-import { createPinia } from 'pinia'
-import App from './App.vue'
-import router from './router'
-import { vLazy } from './directives/vLazy' // ✅ Импорт
+import { createApp } from 'vue';
+import { createPinia } from 'pinia';
+import App from './App.vue';
+import router from './router';
+import { vLazy } from './directives/vLazy';
+import './assets/base.css';
+import './assets/main.css';
+import 'virtual:windi.css';
+import { registerSW } from 'virtual:pwa-register';
 
-import './assets/base.css'
-import './assets/main.css'
-import 'virtual:windi.css'
+registerSW({ immediate: true });
 
-const app = createApp(App)
-
-app.use(createPinia())
-app.use(router)
-
-// ✅ Регистрация директивы
-app.directive('lazy', vLazy)
-
-app.mount('#app')
+const app = createApp(App);
+app.use(createPinia());
+app.use(router);
+app.directive('lazy', vLazy);
+app.mount('#app');

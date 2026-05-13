@@ -95,7 +95,7 @@ export default {
 
 <script setup>
 import { ref, onMounted, defineAsyncComponent } from 'vue' 
-import { usePhotoStore } from '@/stores/photos'
+import { usePhotoStore } from '../stores/media'
 const PhotoDetail = defineAsyncComponent(() => 
   import('./PhotoDetail.vue')
 )
