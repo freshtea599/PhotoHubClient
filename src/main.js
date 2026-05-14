@@ -8,9 +8,11 @@ import './assets/main.css';
 import 'virtual:windi.css';
 import { registerSW } from 'virtual:pwa-register';
 
+// Регистрация Service Worker (будет работать и в dev)
 registerSW({ immediate: true });
 
 const app = createApp(App);
+app.config.devtools = true 
 app.use(createPinia());
 app.use(router);
 app.directive('lazy', vLazy);

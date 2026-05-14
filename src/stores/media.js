@@ -1,60 +1,62 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
-import { photoService } from '../services/api';
+import { photoService, commentService } from '../services/api';
 import { savePhotos, getPhotos, clearPhotos, savePhoto, deletePhotoFromCache } from '../services/indexedDB';
 
-const usePhotoStore = defineStore('photos', () => {
-  const photos = ref([]);
+export const usePhotoStore = defineStore('photos', () => {
+  // Публичные фото (галерея)
+  const publicPhotos = ref([]);
+  // Мои фото (библиотека)
+  const myPhotos = ref([]);
   const loading = ref(false);
   const error = ref(null);
   const hasMore = ref(true);
-  let page = 0;
+  let publicPage = 0;
   const limit = 20;
 
+  // Комментарии текущего открытого фото
+  const comments = ref([]);
+
+  // ========== Публичные фото ==========
   async function fetchPhotos(refresh = false) {
     if (loading.value) return;
-    if (!refresh && !hasMore.value && page > 0) return;
+    if (!refresh && !hasMore.value && publicPage > 0) return;
     loading.value = true;
     error.value = null;
     try {
-      const offset = refresh ? 0 : photos.value.length;
+      const offset = refresh ? 0 : publicPhotos.value.length;
       const response = await photoService.getPhotos(limit, offset);
       const newPhotos = response.data || [];
       if (refresh) {
-        photos.value = newPhotos;
-        await clearPhotos();
-        page = 0;
+        publicPhotos.value = newPhotos;
+        publicPage = 0;
       } else {
-        photos.value = [...photos.value, ...newPhotos];
+        publicPhotos.value = [...publicPhotos.value, ...newPhotos];
       }
       hasMore.value = newPhotos.length === limit;
-      if (!refresh && newPhotos.length) page++;
-      await savePhotos(photos.value);
+      if (!refresh && newPhotos.length) publicPage++;
     } catch (err) {
       error.value = err.message;
-      const cached = await getPhotos();
-      if (cached.length) photos.value = cached;
     } finally {
       loading.value = false;
     }
   }
 
-  async function fetchMyPhotos() {
+  // ========== Мои фото ==========
+  async function fetchMyPhotos(refresh = false) {
     loading.value = true;
     error.value = null;
     try {
-      const response = await photoService.getMyPhotos(50);
-      photos.value = response.data || [];
-      await savePhotos(photos.value);
+      const response = await photoService.getMyPhotos(100); // или с пагинацией
+      myPhotos.value = response.data || [];
     } catch (err) {
       error.value = err.message;
-      const cached = await getPhotos();
-      if (cached.length) photos.value = cached;
     } finally {
       loading.value = false;
     }
   }
 
+  // ========== Общие действия ==========
   async function uploadPhoto(file, description, isPublic) {
     const formData = new FormData();
     formData.append('photo', file);
@@ -62,39 +64,94 @@ const usePhotoStore = defineStore('photos', () => {
     formData.append('is_public', isPublic ? 'true' : 'false');
     const response = await photoService.uploadPhoto(formData);
     const newPhoto = response.data;
-    photos.value.unshift(newPhoto);
+    // Добавляем в мои фото
+    myPhotos.value.unshift(newPhoto);
+    // Если публичное – добавляем и в галерею
+    if (isPublic) {
+      publicPhotos.value.unshift(newPhoto);
+    }
     await savePhoto(newPhoto);
     return newPhoto;
   }
 
   async function updatePhoto(id, data) {
     const response = await photoService.updatePhoto(id, data);
-    const index = photos.value.findIndex(p => p.id === id);
-    if (index !== -1) photos.value[index] = response.data;
+    // Обновляем в обоих массивах
+    const idxPub = publicPhotos.value.findIndex(p => p.id === id);
+    if (idxPub !== -1) 
+      publicPhotos.value[idxPub] = response.data;
+    const idxMine = myPhotos.value.findIndex(p => p.id === id);
+    if (idxMine !== -1) 
+      myPhotos.value[idxMine] = response.data;
     await savePhoto(response.data);
     return response.data;
   }
 
   async function deletePhoto(id) {
     await photoService.deletePhoto(id);
-    photos.value = photos.value.filter(p => p.id !== id);
+    publicPhotos.value = publicPhotos.value.filter(p => p.id !== id);
+    myPhotos.value = myPhotos.value.filter(p => p.id !== id);
     await deletePhotoFromCache(id);
   }
 
+  // ========== Лайки фото ==========
   async function likePhoto(id) {
     await photoService.likePhoto(id);
-    const photo = photos.value.find(p => p.id === id);
-    if (photo) photo.likes_count = (photo.likes_count || 0) + 1;
+    const updateLikes = (arr) => {
+      const photo = arr.find(p => p.id === id);
+      if (photo) photo.likes_count = (photo.likes_count || 0) + 1;
+    };
+    updateLikes(publicPhotos.value);
+    updateLikes(myPhotos.value);
   }
 
   async function unlikePhoto(id) {
     await photoService.unlikePhoto(id);
-    const photo = photos.value.find(p => p.id === id);
-    if (photo) photo.likes_count = Math.max(0, (photo.likes_count || 0) - 1);
+    const updateLikes = (arr) => {
+      const photo = arr.find(p => p.id === id);
+      if (photo) photo.likes_count = Math.max(0, (photo.likes_count || 0) - 1);
+    };
+    updateLikes(publicPhotos.value);
+    updateLikes(myPhotos.value);
+  }
+
+  // ========== Комментарии ==========
+  async function fetchComments(photoId) {
+    const response = await commentService.getComments(photoId);
+    comments.value = response.data || [];
+  }
+
+  async function addComment(photoId, text) {
+    const response = await commentService.createComment(photoId, text);
+    comments.value.unshift(response.data);
+    // также увеличить счётчик комментариев у фото (если нужно)
+  }
+
+  async function likeComment(commentId) {
+    await commentService.likeComment(commentId);
+    const comment = comments.value.find(c => c.id === commentId);
+    if (comment) comment.likes_count += 1;
+  }
+
+  async function unlikeComment(commentId) {
+    await commentService.unlikeComment(commentId);
+    const comment = comments.value.find(c => c.id === commentId);
+    if (comment) comment.likes_count -= 1;
+  }
+
+  async function reportComment(commentId, reason) {
+    await commentService.reportComment(commentId, reason);
+  }
+
+  async function deleteComment(commentId) {
+    await commentService.deleteComment(commentId);
+    comments.value = comments.value.filter(c => c.id !== commentId);
   }
 
   return {
-    photos,
+    publicPhotos,
+    myPhotos,
+    comments,
     loading,
     error,
     hasMore,
@@ -104,9 +161,12 @@ const usePhotoStore = defineStore('photos', () => {
     updatePhoto,
     deletePhoto,
     likePhoto,
-    unlikePhoto
+    unlikePhoto,
+    fetchComments,
+    addComment,
+    likeComment,
+    unlikeComment,
+    reportComment,
+    deleteComment,
   };
 });
-
-export { usePhotoStore };
-export const useMediaStore = usePhotoStore;

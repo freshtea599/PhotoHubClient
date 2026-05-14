@@ -38,6 +38,7 @@ export const photoService = {
   deletePhoto: (id) => api.delete(`/photos/${id}`),
   likePhoto: (id) => api.post(`/photos/${id}/like`),
   unlikePhoto: (id) => api.delete(`/photos/${id}/like`),
+  isPhotoLiked: (id) => api.get(`/photos/${id}/like`),
 };
 
 export const commentService = {
