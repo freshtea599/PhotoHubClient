@@ -1,6 +1,7 @@
+// src/composables/useImageObserver.js
 import { onUnmounted } from 'vue';
 
-export function useImageObserver(rootMargin = '200px') {
+export function useImageObserver(rootMargin = '600px') {
   const observers = new Map();
 
   const observe = (element, url, onLoad) => {

@@ -1,14 +1,9 @@
-// src/sw.js
+// public/sw.js
 const CACHE_NAME = 'photohub-v1';
 const API_CACHE = 'api-cache-v1';
 const IMAGE_CACHE = 'images-cache-v1';
 
-// Файлы для кэширования при установке
-const PRECACHE_URLS = [
-  '/',
-  '/index.html',
-  '/manifest.webmanifest' // если есть
-];
+const PRECACHE_URLS = ['/', '/index.html', '/manifest.webmanifest'];
 
 self.addEventListener('install', (event) => {
   console.log('SW installing...');
@@ -32,18 +27,29 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Стратегии кэширования
-async function cacheFirst(request) {
+async function cacheFirstWithHash(request) {
   const cache = await caches.open(IMAGE_CACHE);
-  const cached = await cache.match(request);
-  if (cached) return cached;
+  const cachedResponse = await cache.match(request);
+  let networkResponse;
   try {
-    const response = await fetch(request.clone());
-    if (response.ok) cache.put(request, response.clone());
-    return response;
-  } catch (e) {
-    return new Response('Network error', { status: 503 });
+    networkResponse = await fetch(request.clone());
+  } catch (err) {
+    if (cachedResponse) return cachedResponse;
+    throw err;
   }
+  const newHash = networkResponse.headers.get('X-Content-Hash');
+  if (cachedResponse) {
+    const oldHash = cachedResponse.headers.get('X-Content-Hash');
+    if (oldHash && newHash && oldHash === newHash && networkResponse.ok) {
+      return cachedResponse;
+    }
+    await cache.delete(request);
+  }
+  if (networkResponse.ok) {
+    const responseToCache = networkResponse.clone();
+    await cache.put(request, responseToCache);
+  }
+  return networkResponse;
 }
 
 async function staleWhileRevalidate(request) {
@@ -58,20 +64,14 @@ async function staleWhileRevalidate(request) {
 
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
-  
-  // Кэширование вариантов изображений (Cache First)
   if (url.pathname.match(/\/api\/photos\/\d+\/variant/)) {
-    event.respondWith(cacheFirst(event.request));
+    event.respondWith(cacheFirstWithHash(event.request));
     return;
   }
-  
-  // Кэширование API списка фото (Stale While Revalidate)
   if (url.pathname.match(/\/api\/photos/)) {
     event.respondWith(staleWhileRevalidate(event.request));
     return;
   }
-  
-  // Для статики (js, css, html) - используем кэш
   event.respondWith(
     caches.match(event.request).then(response => response || fetch(event.request))
   );
