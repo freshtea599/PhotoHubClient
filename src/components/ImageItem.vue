@@ -2,7 +2,7 @@
   <div class="group overflow-hidden rounded-lg shadow-lg bg-white cursor-pointer hover:shadow-xl transition" @click="$emit('click')">
     <div class="relative w-full aspect-square bg-gray-200 overflow-hidden">
       <img
-        :src="imageUrl"
+        v-lazy="imageUrl"
         class="w-full h-full object-cover transition-opacity duration-500"
         :class="{ 'opacity-100': loaded, 'opacity-0': !loaded }"
         @load="loaded = true"
@@ -33,7 +33,7 @@ const loaded = ref(false)
 const formatDate = (dateStr) => dateStr ? new Date(dateStr).toLocaleDateString('ru-RU') : ''
 const imageUrl = computed(() => {
   const base = import.meta.env.VITE_API_URL || 'http://localhost:3000'
-  return `${base}/api/photos/${props.photo.id}/variant?width=400&format=webp&q=80`
+  return `${base}/api/photos/${props.photo.id}/variant?width=1080&format=webp&q=80`
 })
 </script>
 
