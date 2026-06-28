@@ -1,46 +1,57 @@
+<!-- src/components/MediaGrid.vue -->
 <template>
-  <div ref="containerRef" class="scroll-container overflow-auto h-[calc(100vh-150px)]" @scroll="onScrollHandler">
+  <div
+    ref="containerRef"
+    class="media-scroller fixed inset-0 top-[150px] overflow-auto"
+    @scroll="onScroll"
+  >
     <div :style="{ height: totalHeight + 'px', position: 'relative' }">
       <div
         class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6 p-6"
         :style="{ transform: `translateY(${offsetY}px)` }"
       >
         <div
-          v-for="photo in visiblePhotos"
-          :key="photo.id"
-          @click="emit('photo-click', photo)"
+          v-for="slot in visibleSlots"
+          :key="slot.slotIndex"
+          @click="slot.photo && emit('photo-click', slot.photo)"
           class="group overflow-hidden rounded-lg shadow-lg bg-white cursor-pointer hover:shadow-xl transition"
+          style="height: 380px; display: flex; flex-direction: column;"
         >
-          <div class="relative w-full" :style="{ paddingBottom: '56.25%' }">
-            <!-- Canvas для BlurHash (показывается до загрузки реального изображения) -->
-            <canvas
-              v-if="photo.blurhash && !loadedImages[photo.id]"
-              :ref="(el) => setCanvasRef(photo.id, el)"
-              class="absolute inset-0 w-full h-full blur-canvas"
-              width="64"
-              height="64"
-            ></canvas>
-            <!-- Реальное изображение с ленивой загрузкой через v-lazy -->
-            <img
-              v-lazy="getImageUrl(photo, 1080)"
-              :alt="photo.description || 'Photo'"
-              class="absolute inset-0 w-full h-full object-cover transition-opacity duration-500"
-              :class="{ 'opacity-100': loadedImages[photo.id], 'opacity-0': !loadedImages[photo.id] }"
-              @load="loadedImages[photo.id] = true"
-              @error="handleImageError"
-            />
-          </div>
-          <div class="p-4">
-            <p v-if="photo.description" class="text-sm text-gray-700 line-clamp-2 mb-2">{{ photo.description }}</p>
-            <div class="flex justify-between text-xs text-gray-500">
-              <span>{{ formatDate(photo.created_at) }}</span>
-              <div class="flex gap-3">
-                <span>❤️ {{ photo.likes_count || 0 }}</span>
-                <span>💬 {{ photo.comments_count || 0 }}</span>
-              </div>
+          <template v-if="slot.photo">
+            <div class="relative w-full" style="padding-bottom: 56.25%; flex-shrink: 0;">
+              <canvas
+                v-if="!loadedImages[slot.photo.id] && slot.photo.blurhash"
+                :ref="(el) => setCanvasRef(slot.photo.id, el, slot.photo.blurhash)"
+                class="absolute inset-0 w-full h-full blur-canvas"
+                width="64"
+                height="64"
+              ></canvas>
+              <img
+                :src="getImageUrl(slot.photo, 640)"
+                :alt="slot.photo.description || 'Photo'"
+                loading="lazy"
+                class="absolute inset-0 w-full h-full object-cover transition-opacity duration-500"
+                :class="{ 'opacity-100': loadedImages[slot.photo.id], 'opacity-0': !loadedImages[slot.photo.id] }"
+                @load="loadedImages[slot.photo.id] = true"
+                @error="handleImageError"
+              />
             </div>
-            <p v-if="photo.username" class="text-xs text-gray-400 mt-2">Автор: {{ photo.username }}</p>
-          </div>
+            <div class="p-4 flex-1 flex flex-col justify-between">
+              <p v-if="slot.photo.description" class="text-sm text-gray-700 line-clamp-2 mb-2">
+                {{ slot.photo.description }}
+              </p>
+              <div class="flex justify-between text-xs text-gray-500 mt-auto">
+                <span>{{ formatDate(slot.photo.created_at) }}</span>
+                <div class="flex gap-3">
+                  <span>❤️ {{ slot.photo.likes_count || 0 }}</span>
+                  <span>💬 {{ slot.photo.comments_count || 0 }}</span>
+                </div>
+              </div>
+              <p v-if="slot.photo.username" class="text-xs text-gray-400 mt-1">
+                Автор: {{ slot.photo.username }}
+              </p>
+            </div>
+          </template>
         </div>
       </div>
     </div>
@@ -51,98 +62,128 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
 import { usePhotoStore } from '../stores/media';
-import { useVirtualScroll } from '../composables/useVirtualScroll';
 
 const emit = defineEmits(['photo-click']);
 const photoStore = usePhotoStore();
 const containerRef = ref(null);
-const itemHeight = ref(380);
 
-const updateItemHeight = () => {
-  if (containerRef.value) {
-    const card = containerRef.value.querySelector('.group');
-    if (card) itemHeight.value = card.offsetHeight;
-  }
-};
+const ITEM_HEIGHT = 380; // фиксированная высота карточки
+const BUFFER = 8; // увеличенный буфер для плавного скролла
 
 const totalCount = computed(() => photoStore.publicPhotos.length);
 const loading = computed(() => photoStore.loading);
-const { startIndex, endIndex, offsetY, totalHeight, onScroll, setContainerHeight } = useVirtualScroll(itemHeight, totalCount);
 
-// Буфер увеличен до 2 для плавности, но загрузка изображений не начнётся,
-// пока они не пересекут rootMargin в директиве v-lazy
-const visiblePhotos = computed(() => {
+// Состояние скролла
+const scrollTop = ref(0);
+const containerHeight = ref(window.innerHeight - 150); // начальное приближение
+
+const startIndex = computed(() => Math.max(0, Math.floor(scrollTop.value / ITEM_HEIGHT) - BUFFER));
+const endIndex = computed(() => Math.min(totalCount.value, Math.ceil((scrollTop.value + containerHeight.value) / ITEM_HEIGHT) + BUFFER));
+const offsetY = computed(() => startIndex.value * ITEM_HEIGHT);
+const totalHeight = computed(() => totalCount.value * ITEM_HEIGHT);
+
+// Слоты для рециркуляции (динамическое количество)
+const visibleSlots = computed(() => {
   const start = startIndex.value;
-  let end = endIndex.value + 2;
-  if (end > totalCount.value) end = totalCount.value;
-  return photoStore.publicPhotos.slice(start, end);
+  const count = Math.ceil(containerHeight.value / ITEM_HEIGHT) + BUFFER * 2;
+  const slots = [];
+  for (let i = 0; i < count; i++) {
+    const photoIndex = start + i;
+    const photo = photoIndex < totalCount.value ? photoStore.publicPhotos[photoIndex] : null;
+    slots.push({ slotIndex: i, photo });
+  }
+  return slots;
 });
 
 const loadedImages = ref({});
 const canvasRefs = ref({});
 
-const setCanvasRef = async (id, el) => {
-  if (el && !canvasRefs.value[id]) {
-    canvasRefs.value[id] = el;
-    const photo = photoStore.publicPhotos.find(p => p.id === id);
-    if (photo?.blurhash) {
-      try {
-        const { decode } = await import('blurhash');
-        const pixels = decode(photo.blurhash, 64, 64);
-        const canvas = el;
-        canvas.width = 64;
-        canvas.height = 64;
-        const ctx = canvas.getContext('2d');
-        const imgData = ctx.createImageData(64, 64);
-        imgData.data.set(pixels);
-        ctx.putImageData(imgData, 0, 0);
-      } catch (e) {
-        console.warn('BlurHash decode error', e);
-      }
-    }
+// Вспомогательные функции
+const setCanvasRef = (id, el, blurhash) => {
+  if (el && blurhash) {
+    import('blurhash').then(({ decode }) => {
+      const pixels = decode(blurhash, 64, 64);
+      const canvas = el;
+      canvas.width = 64;
+      canvas.height = 64;
+      const ctx = canvas.getContext('2d');
+      const imgData = ctx.createImageData(64, 64);
+      imgData.data.set(pixels);
+      ctx.putImageData(imgData, 0, 0);
+    }).catch(e => console.warn('BlurHash decode error', e));
   }
 };
 
-const getImageUrl = (photo, width = 1080) => {
+const getImageUrl = (photo, width = 640) => {
   const base = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-  return `${base}/api/photos/${photo.id}/variant?width=${width}&format=webp&q=85`;
+  return `${base}/api/photos/${photo.id}/variant?width=${width}&format=webp&q=75`;
 };
 
-const formatDate = (dateStr) => dateStr ? new Date(dateStr).toLocaleDateString('ru-RU') : '';
+const formatDate = (dateStr) =>
+  dateStr ? new Date(dateStr).toLocaleDateString('ru-RU') : '';
+
 const handleImageError = (e) => {
-  e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300"%3E%3Crect width="400" height="300" fill="%23e5e7eb"/%3E%3C/svg%3E';
+  e.target.src = 'data:image/svg+xml,...';
 };
 
-let scrollTimeout = null;
-const onScrollHandler = (e) => {
-  onScroll(e);
-  if (scrollTimeout) clearTimeout(scrollTimeout);
-  scrollTimeout = setTimeout(() => {
-    const scrollBottom = e.target.scrollHeight - e.target.scrollTop - e.target.clientHeight;
-    if (scrollBottom < 500 && !photoStore.loading && photoStore.hasMore) {
-      photoStore.fetchPhotos();
-    }
-  }, 100);
-};
+// Переменные для компенсации скролла при подгрузке
+let previousScrollTop = 0;
+let previousScrollHeight = 0;
 
-onMounted(async () => {
-  if (!photoStore.publicPhotos.length && !photoStore.loading) {
-    await photoStore.fetchPhotos();
+// Обработчик скролла
+const onScroll = (e) => {
+  scrollTop.value = e.target.scrollTop;
+  if (!containerHeight.value && e.target.clientHeight) {
+    containerHeight.value = e.target.clientHeight;
   }
-  await nextTick();
-  updateItemHeight();
-  if (containerRef.value) {
-    setContainerHeight(containerRef.value.clientHeight);
-    onScroll({ target: containerRef.value });
+  // Бесконечная подгрузка
+  const container = containerRef.value;
+  if (!container) return;
+  const scrollBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+  if (scrollBottom < 500 && !photoStore.loading && photoStore.hasMore) {
+    previousScrollTop = container.scrollTop;
+    previousScrollHeight = container.scrollHeight;
+    photoStore.fetchPhotos();
+  }
+};
+
+// Компенсация скролла после добавления новых фото
+watch(
+  () => photoStore.publicPhotos.length,
+  (newLen, oldLen) => {
+    if (newLen > oldLen && containerRef.value) {
+      const container = containerRef.value;
+      const newScrollHeight = container.scrollHeight;
+      container.scrollTop = previousScrollTop + (newScrollHeight - previousScrollHeight);
+    }
+  }
+);
+
+// Предиктивная загрузка следующих 6 фото
+watch(endIndex, (newEnd) => {
+  const nextStart = newEnd;
+  const nextEnd = Math.min(nextStart + 6, totalCount.value);
+  for (let i = nextStart; i < nextEnd; i++) {
+    const photo = photoStore.publicPhotos[i];
+    if (photo) new Image().src = getImageUrl(photo, 640);
   }
 });
 
+onMounted(() => {
+  if (!photoStore.publicPhotos.length && !photoStore.loading) {
+    photoStore.fetchPhotos();
+  }
+  if (containerRef.value) {
+    containerHeight.value = containerRef.value.clientHeight;
+  }
+});
+
+// Обновление высоты при ресайзе
 const resizeObserver = new ResizeObserver(() => {
   if (containerRef.value) {
-    setContainerHeight(containerRef.value.clientHeight);
-    updateItemHeight();
+    containerHeight.value = containerRef.value.clientHeight;
   }
 });
 onMounted(() => resizeObserver.observe(containerRef.value));
@@ -150,15 +191,13 @@ onBeforeUnmount(() => resizeObserver.disconnect());
 </script>
 
 <style scoped>
-/* Скрываем полосу прокрутки, но оставляем функциональность */
-.scroll-container {
-    scrollbar-width: none; /* Firefox */
-    -ms-overflow-style: none; /* IE/Edge */
+.media-scroller {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
-.scroll-container::-webkit-scrollbar {
-    display: none; /* Chrome/Safari/Opera */
+.media-scroller::-webkit-scrollbar {
+  display: none;
 }
-
 .blur-canvas {
   filter: blur(10px);
   transform: scale(1.02);

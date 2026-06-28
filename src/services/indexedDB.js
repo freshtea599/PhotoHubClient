@@ -1,4 +1,6 @@
+// src/services/indexedDB.js
 import { openDB } from 'idb';
+import { toRaw } from 'vue';
 
 const DB_NAME = 'PhotoHubDB';
 const STORE_NAME = 'photos';
@@ -19,23 +21,20 @@ function getDB() {
   return dbPromise;
 }
 
-// Очищаем объект от несериализуемых полей
 function sanitizePhoto(photo) {
-  // Создаём копию только с нужными полями
-  const { variants, comments, user, ...rest } = photo;
-  // Если нужно сохранить variants, копируем их как простые объекты
-  if (variants && Array.isArray(variants)) {
-    rest.variants = variants.map(v => ({ ...v }));
-  }
-  return rest;
+  // Снимаем реактивность, если объект проксирован
+  const raw = toRaw(photo);
+  // Убираем поля, которые нельзя клонировать или которые занимают много места
+  const { variants, comments, user, ...rest } = raw;
+  return { ...rest };
 }
 
 export async function savePhotos(photos) {
   const db = await getDB();
   const tx = db.transaction(STORE_NAME, 'readwrite');
-  for (const photo of photos) {
-    const clean = sanitizePhoto(photo);
-    tx.store.put(clean);
+  const rawPhotos = Array.isArray(photos) ? photos.map(p => sanitizePhoto(p)) : [];
+  for (const photo of rawPhotos) {
+    tx.store.put(photo);
   }
   await tx.done;
 }

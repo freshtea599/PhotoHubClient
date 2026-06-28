@@ -1,3 +1,4 @@
+// src/directives/vLazy.js
 export const vLazy = {
   mounted(el, binding) {
     el.classList.add('lazy-image');
@@ -27,11 +28,9 @@ export const vLazy = {
     el._lazyObserver = observer;
   },
   updated(el, binding) {
-    // При изменении src (например, при рециркуляции DOM в виртуальном скролле)
     if (binding.value !== el.dataset.src) {
       el.dataset.src = binding.value;
-      // Если изображение уже было загружено, но сейчас не в зоне видимости, сбросим src,
-      // чтобы при следующем появлении загрузилось новое.
+      // сбрасываем, чтобы IntersectionObserver снова сработал при входе в зону
       if (el.src && !el._lazyReobserved) {
         el.src = '';
         el.classList.remove('loaded');

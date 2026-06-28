@@ -1,5 +1,4 @@
-// public/sw.js
-const CACHE_NAME = 'photohub-v1';
+const CACHE_NAME = 'photohub-static-v1';
 const API_CACHE = 'api-cache-v1';
 const IMAGE_CACHE = 'images-cache-v1';
 
@@ -26,6 +25,15 @@ self.addEventListener('activate', (event) => {
     )).then(() => self.clients.claim())
   );
 });
+
+async function cacheFirstStatic(request) {
+  const cache = await caches.open(CACHE_NAME);
+  const cached = await cache.match(request);
+  if (cached) return cached;
+  const response = await fetch(request);
+  if (response.ok) cache.put(request, response.clone());
+  return response;
+}
 
 async function cacheFirstWithHash(request) {
   const cache = await caches.open(IMAGE_CACHE);
@@ -64,12 +72,21 @@ async function staleWhileRevalidate(request) {
 
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
+  // Игнорируем запросы к расширениям (chrome-extension://, moz-extension:// и т.п.)
+  if (!url.protocol.startsWith('http')) {
+    return;
+  }
+  
   if (url.pathname.match(/\/api\/photos\/\d+\/variant/)) {
     event.respondWith(cacheFirstWithHash(event.request));
     return;
   }
   if (url.pathname.match(/\/api\/photos/)) {
     event.respondWith(staleWhileRevalidate(event.request));
+    return;
+  }
+  if (url.pathname.match(/\.(js|css|html|json|ico)$/) || url.pathname === '/') {
+    event.respondWith(cacheFirstStatic(event.request));
     return;
   }
   event.respondWith(

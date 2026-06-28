@@ -1,3 +1,17 @@
+<script setup>
+import { ref, computed } from 'vue'
+
+const props = defineProps({ photo: Object, required: true })
+const emit = defineEmits(['click'])
+const loaded = ref(false)
+
+const formatDate = (dateStr) => dateStr ? new Date(dateStr).toLocaleDateString('ru-RU') : ''
+const imageUrl = computed(() => {
+  const base = import.meta.env.VITE_API_URL || 'http://localhost:3000'
+  return `${base}/api/photos/${props.photo.id}/variant?width=640&format=webp&q=75`
+})
+</script>
+
 <template>
   <div class="group overflow-hidden rounded-lg shadow-lg bg-white cursor-pointer hover:shadow-xl transition" @click="$emit('click')">
     <div class="relative w-full aspect-square bg-gray-200 overflow-hidden">
@@ -22,20 +36,6 @@
     </div>
   </div>
 </template>
-
-<script setup>
-import { ref, computed } from 'vue'
-
-const props = defineProps({ photo: Object, required: true })
-const emit = defineEmits(['click'])
-const loaded = ref(false)
-
-const formatDate = (dateStr) => dateStr ? new Date(dateStr).toLocaleDateString('ru-RU') : ''
-const imageUrl = computed(() => {
-  const base = import.meta.env.VITE_API_URL || 'http://localhost:3000'
-  return `${base}/api/photos/${props.photo.id}/variant?width=1080&format=webp&q=80`
-})
-</script>
 
 <style scoped>
 .line-clamp-2 {

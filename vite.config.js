@@ -18,9 +18,15 @@ export default defineConfig({
       output: {
         manualChunks: {
           'vue-vendor': ['vue', 'vue-router', 'pinia'],
-          'blurhash': ['blurhash']
+          'blurhash': ['blurhash'],
+          'services': ['axios', './src/services/api.js'],
+          'stores': ['./src/stores/auth.js', './src/stores/media.js'],
+          'composables': ['./src/composables/useVirtualScroll.js', './src/composables/useImageObserver.js']
         }
       }
     }
+  },
+  optimizeDeps: {
+    include: ['blurhash', 'vue', 'vue-router', 'pinia', 'axios']
   }
 });

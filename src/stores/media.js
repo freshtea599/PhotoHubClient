@@ -1,5 +1,6 @@
+// src/stores/media.js
 import { defineStore } from 'pinia';
-import { ref } from 'vue';
+import { ref, toRaw } from 'vue';
 import { photoService, commentService } from '../services/api';
 import { savePhotos, getPhotos, clearPhotos, savePhoto, deletePhotoFromCache } from '../services/indexedDB';
 
@@ -13,23 +14,25 @@ export const usePhotoStore = defineStore('photos', () => {
     let publicPage = 0;
     const limit = 20;
 
-    // Вспомогательные методы для работы с IndexedDB
+    // Загрузка из кэша IndexedDB
     async function loadFromCache() {
         const cached = await getPhotos();
         if (cached && cached.length) {
-            publicPhotos.value = cached;
+            publicPhotos.value = cached; // объекты из IDB уже обычные
             return true;
         }
         return false;
     }
 
+    // Фоновое обновление без блокировки интерфейса
     async function refreshCacheInBackground() {
         try {
             const response = await photoService.getPhotos(limit, 0);
             const newPhotos = response.data || [];
             if (newPhotos.length) {
                 publicPhotos.value = newPhotos;
-                await savePhotos(newPhotos);
+                // Сохраняем сырой массив
+                await savePhotos(newPhotos.map(p => toRaw(p)));
                 hasMore.value = newPhotos.length === limit;
             }
         } catch (err) {
@@ -37,33 +40,40 @@ export const usePhotoStore = defineStore('photos', () => {
         }
     }
 
+    // Основная загрузка/подгрузка публичных фото
     async function fetchPhotos(refresh = false) {
         if (loading.value) return;
-        // При первом вызове (нет данных) пытаемся загрузить из кэша
+
+        // Первый запуск – пробуем кэш
         if (!refresh && publicPhotos.value.length === 0) {
             const fromCache = await loadFromCache();
             if (fromCache) {
-                // Фоновое обновление
-                refreshCacheInBackground();
+                refreshCacheInBackground(); // тихое обновление
                 return;
             }
         }
+
         if (!refresh && !hasMore.value && publicPage > 0) return;
+
         loading.value = true;
         error.value = null;
         try {
             const offset = refresh ? 0 : publicPhotos.value.length;
             const response = await photoService.getPhotos(limit, offset);
             const newPhotos = response.data || [];
+
             if (refresh) {
                 publicPhotos.value = newPhotos;
                 publicPage = 0;
             } else {
                 publicPhotos.value = [...publicPhotos.value, ...newPhotos];
             }
+
             hasMore.value = newPhotos.length === limit;
             if (!refresh && newPhotos.length) publicPage++;
-            await savePhotos(publicPhotos.value);
+
+            // Кэшируем сырые объекты
+            await savePhotos(toRaw(publicPhotos.value));
         } catch (err) {
             error.value = err.message;
         } finally {
@@ -71,7 +81,8 @@ export const usePhotoStore = defineStore('photos', () => {
         }
     }
 
-    async function fetchMyPhotos(refresh = false) {
+    // Загрузка фото текущего пользователя
+    async function fetchMyPhotos() {
         loading.value = true;
         error.value = null;
         try {
@@ -84,6 +95,7 @@ export const usePhotoStore = defineStore('photos', () => {
         }
     }
 
+    // Загрузка нового фото
     async function uploadPhoto(file, description, isPublic) {
         const formData = new FormData();
         formData.append('photo', file);
@@ -95,20 +107,23 @@ export const usePhotoStore = defineStore('photos', () => {
         if (isPublic) {
             publicPhotos.value.unshift(newPhoto);
         }
-        await savePhoto(newPhoto);
+        await savePhoto(toRaw(newPhoto));
         return newPhoto;
     }
 
+    // Обновление описания/публичности
     async function updatePhoto(id, data) {
         const response = await photoService.updatePhoto(id, data);
+        const updated = response.data;
         const idxPub = publicPhotos.value.findIndex(p => p.id === id);
-        if (idxPub !== -1) publicPhotos.value[idxPub] = response.data;
+        if (idxPub !== -1) publicPhotos.value[idxPub] = updated;
         const idxMine = myPhotos.value.findIndex(p => p.id === id);
-        if (idxMine !== -1) myPhotos.value[idxMine] = response.data;
-        await savePhoto(response.data);
-        return response.data;
+        if (idxMine !== -1) myPhotos.value[idxMine] = updated;
+        await savePhoto(toRaw(updated));
+        return updated;
     }
 
+    // Удаление фото
     async function deletePhoto(id) {
         await photoService.deletePhoto(id);
         publicPhotos.value = publicPhotos.value.filter(p => p.id !== id);
@@ -116,26 +131,28 @@ export const usePhotoStore = defineStore('photos', () => {
         await deletePhotoFromCache(id);
     }
 
+    // Лайки фото
     async function likePhoto(id) {
         await photoService.likePhoto(id);
-        const updateLikes = (arr) => {
-            const photo = arr.find(p => p.id === id);
-            if (photo) photo.likes_count = (photo.likes_count || 0) + 1;
+        const inc = (arr) => {
+            const p = arr.find(p => p.id === id);
+            if (p) p.likes_count = (p.likes_count || 0) + 1;
         };
-        updateLikes(publicPhotos.value);
-        updateLikes(myPhotos.value);
+        inc(publicPhotos.value);
+        inc(myPhotos.value);
     }
 
     async function unlikePhoto(id) {
         await photoService.unlikePhoto(id);
-        const updateLikes = (arr) => {
-            const photo = arr.find(p => p.id === id);
-            if (photo) photo.likes_count = Math.max(0, (photo.likes_count || 0) - 1);
+        const dec = (arr) => {
+            const p = arr.find(p => p.id === id);
+            if (p) p.likes_count = Math.max(0, (p.likes_count || 0) - 1);
         };
-        updateLikes(publicPhotos.value);
-        updateLikes(myPhotos.value);
+        dec(publicPhotos.value);
+        dec(myPhotos.value);
     }
 
+    // Комментарии
     async function fetchComments(photoId) {
         const response = await commentService.getComments(photoId);
         comments.value = response.data || [];
@@ -148,14 +165,14 @@ export const usePhotoStore = defineStore('photos', () => {
 
     async function likeComment(commentId) {
         await commentService.likeComment(commentId);
-        const comment = comments.value.find(c => c.id === commentId);
-        if (comment) comment.likes_count += 1;
+        const c = comments.value.find(c => c.id === commentId);
+        if (c) c.likes_count += 1;
     }
 
     async function unlikeComment(commentId) {
         await commentService.unlikeComment(commentId);
-        const comment = comments.value.find(c => c.id === commentId);
-        if (comment) comment.likes_count -= 1;
+        const c = comments.value.find(c => c.id === commentId);
+        if (c) c.likes_count -= 1;
     }
 
     async function reportComment(commentId, reason) {
